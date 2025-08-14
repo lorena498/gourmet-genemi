@@ -1,37 +1,32 @@
-
-import { GoogleGenAI } from "@google/genai";
-
-if (!process.env.API_KEY) {
-  throw new Error("API_KEY environment variable not set");
-}
-
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 export const generateFoodDescription = async (foodName: string): Promise<string> => {
   try {
-    const prompt = `Generate a short, single-paragraph, mouth-watering, and highly appealing promotional description for a dish called "${foodName}". Focus on sensory details like aroma, texture, and taste. Keep it under 50 words. Do not use markdown or titles.`;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        temperature: 0.8,
-        topP: 0.95,
-        topK: 40,
-        thinkingConfig: { thinkingBudget: 0 } // For faster response
+    const response = await fetch('/api/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({ foodName }),
     });
 
-    const text = response.text.trim();
-    if (!text) {
-        return `An exquisite ${foodName} prepared with the freshest ingredients, offering a delightful experience.`
+    // If the server response is not OK, we should handle it.
+    if (!response.ok) {
+        // Try to get a meaningful error from the response body
+        const errorData = await response.json().catch(() => ({})); // Gracefully handle non-json responses
+        // Use the description from the error data if available (e.g., our fallback from the server)
+        if (errorData.description) {
+            return errorData.description;
+        }
+        // Log a more specific error if possible, otherwise use the status text
+        console.error("API error:", errorData.error || response.statusText);
+        throw new Error('Failed to generate description from server.');
     }
-    // Clean up potential markdown-like characters that might slip through
-    return text.replace(/[*#_]/g, '');
+
+    const data = await response.json();
+    return data.description;
 
   } catch (error) {
-    console.error("Error generating food description:", error);
-    // Provide a graceful fallback description
+    console.error("Error calling generation service:", error);
+    // Provide a graceful fallback description for network errors or other client-side issues
     return `An exquisite ${foodName} prepared with the freshest ingredients, offering a delightful experience with every bite.`;
   }
 };
